@@ -1,0 +1,124 @@
+--- kernel/sched/core.c	2015-10-01 20:09:05.000000000 +0530
++++ /home/swapna/Downloads/core(2).c	2016-06-10 22:40:07.197762859 +0530
+@@ -1,4 +1,4 @@
+-/*
++:/*
+  *  kernel/sched/core.c
+  *
+  *  Kernel scheduler and related syscalls
+@@ -89,6 +89,9 @@
+ 
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/sched.h>
++#define window_size 16
++#define INIT 0
++
+ 
+ void start_bandwidth_timer(struct hrtimer *period_timer, ktime_t period)
+ {
+@@ -2735,6 +2738,8 @@
+ 	BUG(); /* the idle class will always have a runnable task */
+ }
+ 
++
++struct history *temp=NULL,*process=NULL,*head=NULL;
+ /*
+  * __schedule() is the main scheduler function.
+  *
+@@ -2772,10 +2777,14 @@
+  *          - return from syscall or exception to user-space
+  *          - return from interrupt-handler to user-space
+  */
++
+ static void __sched __schedule(void)
+ {
+-	struct task_struct *prev, *next;
++	struct task_struct *prev, *next,*run_curr;
+ 	unsigned long *switch_count;
++	int j;
++	unsigned char count=0,flag=0,voluntary=0,non_voluntary=0,max=0;
++
+ 	struct rq *rq;
+ 	int cpu;
+ 
+@@ -2785,6 +2794,7 @@
+ 	rq = cpu_rq(cpu);
+ 	rcu_note_context_switch(cpu);
+ 	prev = rq->curr;
++	run_curr=prev;      //storing current process
+ 
+ 	schedule_debug(prev);
+ 
+@@ -2798,8 +2808,10 @@
+ 	 */
+ 	smp_mb__before_spinlock();
+ 	raw_spin_lock_irq(&rq->lock);
++		
+ 
+ 	switch_count = &prev->nivcsw;
++	flag=0;   //flag 0 if non-voluntary
+ 	if (prev->state && !(preempt_count() & PREEMPT_ACTIVE)) {
+ 		if (unlikely(signal_pending_state(prev->state, prev))) {
+ 			prev->state = TASK_RUNNING;
+@@ -2821,7 +2833,53 @@
+ 			}
+ 		}
+ 		switch_count = &prev->nvcsw;
++		flag=1;    //flag 1 if voluntary
+ 	}
++/*code start */
++
++	if(run_curr->pid != INIT){
++		if(run_curr->i==window_size){
++			for(j=0;j<window_size;j++){
++				if((1<<j & run_curr->window[j/8])>0)
++					non_voluntary+=1;
++				else
++					voluntary+=1;
++			}
++			if(voluntary < non_voluntary){
++				for(j=0;j<window_size;j++){
++					if( (1<<j & run_curr->window[j/8])>0)
++					{
++						count++;
++						if( (1<<(j+1) & run_curr->window[j/8])==0)
++						{	
++							if(count>max){
++								max=count;
++								count=0; 		
++							}
++						}
++					}
++				}
++				if(non_voluntary/2 < max)
++					printk(KERN_INFO "Process is cpu bound %d",run_curr->pid);
++			}
++		run_curr->i=0;
++		}
++
++	if(flag==1){
++		if((run_curr->i)>=8){
++		run_curr->window[1]= 0 <<((run_curr->i)-8);//vol
++		}
++		run_curr->window[0]= 0 << run_curr->i;//vol
++	}
++	else{	
++		if((run_curr->i)>=8){
++		run_curr->window[1]= 1 <<((run_curr->i)-8);//non-vol
++		}
++		run_curr->window[0]= 1 << run_curr->i;//non
++	}
++	run_curr->i++;
++	}
++
+ 
+ 	if (task_on_rq_queued(prev) || rq->skip_clock_update < 0)
+ 		update_rq_clock(rq);
+@@ -2836,6 +2894,7 @@
+ 		rq->curr = next;
+ 		++*switch_count;
+ 
++
+ 		context_switch(rq, prev, next); /* unlocks the rq */
+ 		/*
+ 		 * The context switch have flipped the stack from under us

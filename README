@@ -1,0 +1,20 @@
+Project Topic: Asymetric scheduler
+
+Goal: Modify Linux scheduler to enable Asymetric Scheduling(dedicating one or more processor to compute) without impinging on O(1) property of Linux scheduler.
+
+Done Work:
+There are two patch files and corresponding file names:
+	sched.h --  sched.patch
+	core.c	--  core.patch
+
+While compiling kernel we have make some changes in its config file.
+	kernel_compile.sh (32 bit)
+
+sched.h:
+	Two byte array is declare in structure task_struct. Maintaing a counter in this file.
+	
+core.c:
+	In this scheduler function, one flag is used for differentiate which process is doing what context switch. According to this information is stored into Two byte array and there is a limit i.e. window size. When array reaches to window size then it checks how many bits are set. On maxmimum number of contigious bits it will say cpu bound.
+	
+
+

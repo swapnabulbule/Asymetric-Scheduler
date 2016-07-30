@@ -1,0 +1,25 @@
+--- include/linux/sched.h	2015-10-01 20:09:05.000000000 +0530
++++ /home/swapna/Downloads/sched.h	2016-06-10 18:23:42.619997696 +0530
+@@ -1232,12 +1232,22 @@
+ 	perf_nr_task_contexts,
+ };
+ 
++struct history{
++	unsigned char window[2];
++	unsigned char flag:1;
++	struct history *next;
++};
++
+ struct task_struct {
+ 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
+ 	void *stack;
+ 	atomic_t usage;
+ 	unsigned int flags;	/* per process flags, defined below */
+ 	unsigned int ptrace;
++	unsigned char i;
++	struct history *head;
++	unsigned char window[2];
++	
+ 
+ #ifdef CONFIG_SMP
+ 	struct llist_node wake_entry;
